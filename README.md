@@ -16,9 +16,14 @@ executable solver - IMP.py
 `python ISE.py –i <social network> -s <seed set> -m <diffusion model> -t <time budget>`
 
 <social network> is the absolute path of the social network file
+
 <seed set> is the absolute path of the seed set file
+
 <diffusion model> can only be IC or LT
+
 <time budget> is a positive number which indicates how many seconds(in Wall clock time, range: [60s, 1200s]) your algorithm can spend on this instance. 
+
+e.g. `python ISE.py -i network.txt -s seeds.txt -m LT -t 120`
 
 Output:
 
@@ -35,6 +40,8 @@ Output:
 <diffusion model> can only be IC or LT
 
 <time budget> is a positive number which indicates how many seconds (in Wall clock time, range: [60s, 1200s]) your algorithm can spend on this instance. 
+
+e.g. `python IMP.py -i network.txt -k 10 -m LT -t 120`
 
 Output: 
 
@@ -56,7 +63,7 @@ A *size-k* seed set S' with the maximal 𝜎(𝑆) for any *size-k* seed set S �
 
 # Stochastic Diffusion Models
 
-Diffusion process: At round 0, S中的所有node变成active，其余是inactive，每一轮，每个actived node都会active它的neighbors，直到所有nodes都activated，process end.
+Diffusion process: At round 0, S中的所有node变成active，其余是inactive，每一轮，每个actived node都会active它的neighbors，直到所有nodes都activated，process end.s
 
 ## Independent Cascade(IC)
 

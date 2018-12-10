@@ -6,7 +6,7 @@
 #    By: Corey <390583019@qq.com>                   +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2018/11/26 21:42:36 by Corey             #+#    #+#              #
-#    Updated: 2018/12/01 19:44:29 by Corey            ###   ########.fr        #
+#    Updated: 2018/12/10 16:19:50 by Corey            ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -15,7 +15,9 @@ import getopt
 import copy
 import time
 import random
+from multiprocessing import Process, Queue
 import numpy as np
+
 
 
 SOCIAL_NETWORK = ''
@@ -33,42 +35,49 @@ for op, value in opts:
     if op == '-m':
         DIFFUSION_MODEL = value
     if op == '-t':
-        TIME_BUDGET = value
+        TIME_BUDGET = int(value)
 if DIFFUSION_MODEL != 'IC' and DIFFUSION_MODEL != 'LT':
     raise ValueError('Diffusion Model Can Only Be "IC" or "LT"!')
 
-def main():
+def main(model, n):
     try:
+        start_time = time.time()
         network = open(SOCIAL_NETWORK)
         seed = open(SEED_SET)
-
         vertices, edges = network.readline().split()
         graph = Graph(vertices,edges)
         for line in network:
             start, end, weight = int(line.split()[0]), int(line.split()[1]),float(line.split()[2])
             edge = Edge(start, end, weight)
             graph.addEdge(edge)
-
+        
         seeds = []
         for line in seed:
             seeds.append(int(line.split()[0]))
+        esti = Estimator(model)
 
-        esti = Estimator(DIFFUSION_MODEL)
+        result = 0
+        for i in range(n):
+            result += esti.estimate(graph, seeds)
+        result /= n
+        print(result)
+        print('time cost: ',time.time()-start_time)
+
+        mp_time = time.time()
+        worker = []
+        worker_num = 4
+        create_worker(worker_num,worker,esti,graph, seeds)
+        for i in range(N):
+            worker[i % worker_num].inQ.put(i)
         result = 0
         for i in range(N):
-            result += esti.estimate(graph, seeds)
+            result += worker[i % worker_num].outQ.get()
         result /= N
         print(result)
-
+        finish_worker(worker)
+        print('time cost: ',time.time()-start_time)
     except IOError:
-        print('File Not Found!')
-        pass
-    
-    # for debug
-    # print(np.where(graph.getWeightsMatrix()>0))
-    # print(seeds)
-    # print(graph.getOutNeighbors(10))
-    
+        print('File Not Found!')    
 
 class Edge():
     def __init__(self, start, end, weight):
@@ -118,8 +127,6 @@ class Graph():
         result = set(In+Out)
         return list(result)
         
-
-
 class Estimator():
     def __init__(self, model):
         self.model = model # IC/LT
@@ -138,7 +145,7 @@ class Estimator():
         while(len(activity)):
             newActivity = set()
             for each_seed in activity:
-                neighbors = network.getNeighbors(each_seed)
+                neighbors = network.getOutNeighbors(each_seed)
                 inActivity = set(neighbors)-total_activity
                 for each_inactivity_neighbor in inActivity:
                     weight = network.getWeightsMatrix()[each_seed, each_inactivity_neighbor]
@@ -163,7 +170,7 @@ class Estimator():
         while(len(activity)):
             newActivity = set()
             for each_seed in activity:
-                neighbors = network.getNeighbors(each_seed)
+                neighbors = network.getOutNeighbors(each_seed)
                 inActivity = set(neighbors)-total_activity
                 for each_inactivity_neighbor in inActivity:
                     itsNeighbors = set(network.getInNeighbors(each_inactivity_neighbor))
@@ -177,10 +184,37 @@ class Estimator():
             activity = newActivity
         count = len(total_activity)
         return count
-    
 
+class Worker(Process):
+    '''multiprocessing'''
+    def __init__(self, inQ, outQ, random_seed, estimator, network, seeds):
+        super(Worker, self).__init__(target=self.start)
+        self.inQ = inQ
+        self.outQ = outQ
+        self.estimator = estimator
+        self.network = network
+        self.seeds = seeds
+        np.random.seed(random_seed) # 如果子进程的任务是有随机性的，一定要给每个子进程不同的随机数种子，否则就在重复相同的结果了
+
+    def run(self):
+        while True:
+            task = self.inQ.get()  # 取出任务， 如果队列为空， 这一步会阻塞直到队列有元素
+            result = self.estimator.estimate(self.network, self.seeds)  # 执行任务
+            self.outQ.put(result)  # 返回结果
+
+
+def create_worker(num,worker,estimator, network, seeds):
+    '''num: 多进程数量'''
+    for i in range(num):
+        worker.append(Worker(Queue(), Queue(), np.random.randint(0, 10**9),estimator,network, seeds))
+        worker[i].start()
+
+def finish_worker(worker):
+    '''关闭所有子进程'''
+    for w in worker:
+        w.terminate()
 
 
 
 if __name__ == "__main__":
-    main()
+    main(DIFFUSION_MODEL, N)
