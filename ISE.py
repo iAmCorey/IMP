@@ -6,7 +6,7 @@
 #    By: Corey <390583019@qq.com>                   +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2018/11/26 21:42:36 by Corey             #+#    #+#              #
-#    Updated: 2018/12/10 17:36:55 by Corey            ###   ########.fr        #
+#    Updated: 2018/12/11 09:58:21 by Corey            ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -17,70 +17,37 @@ import time
 import random
 import numpy as np
 
-
-
 SOCIAL_NETWORK = ''
 SEED_SET = ''
 DIFFUSION_MODEL = ''
 TIME_BUDGET = 0
 N = 10000
 
-opts, args = getopt.getopt(sys.argv[1:], "i:s:m:t:")
-for op, value in opts:
-    if op == '-i':
-        SOCIAL_NETWORK = value
-    if op == '-s':
-        SEED_SET = value
-    if op == '-m':
-        DIFFUSION_MODEL = value
-    if op == '-t':
-        TIME_BUDGET = int(value)
-if DIFFUSION_MODEL != 'IC' and DIFFUSION_MODEL != 'LT':
-    raise ValueError('Diffusion Model Can Only Be "IC" or "LT"!')
 
-def main(model, n):
-    try:
-        start_time = time.time()
-        network = open(SOCIAL_NETWORK)
-        seed = open(SEED_SET)
-        vertices, edges = network.readline().split()
-        graph = Graph(vertices,edges)
-        for line in network:
-            start, end, weight = int(line.split()[0]), int(line.split()[1]),float(line.split()[2])
-            edge = Edge(start, end, weight)
-            graph.addEdge(edge)
-        
-        seeds = []
-        for line in seed:
-            seeds.append(int(line.split()[0]))
+def main(graph, seeds, model, n, timeLimit):
+    esti = Estimator(model)
+    once_start = time.time()
+    result = esti.estimate(graph, seeds)
+    once_time = time.time()-once_start
+    for i in range(n-1):
+        result += esti.estimate(graph, seeds)
+        if (time.time()-start_time) > (TIME_BUDGET-(once_time+1)):
+            result /= (i+1)
+            print(result)
+            return
+    result /= n
+    print(result)
 
-        # print(graph.getWeight(9,5))
-        esti = Estimator(model)
 
-        once_start = time.time()
-        result = esti.estimate(graph, seeds)
-        once_time = time.time()-once_start
-
-        for i in range(n-1):
-            result += esti.estimate(graph, seeds)
-            if (time.time()-start_time) > (TIME_BUDGET-(once_time+1)):
-                result /= (i+1)
-                print(result)
-                return
-        result /= n
-        print(result)
-        print('time cost: ',time.time()-start_time)
-
-    except IOError:
-        print('File Not Found!')    
-
-class Edge():
-    def __init__(self, start, end, weight):
-        self.start = start
-        self.end = end
-        self.weight = weight
-        pass
-
+def iseInterface(graph, seeds, model, n):
+    esti = Estimator(model)
+    once_start = time.time()
+    result = esti.estimate(graph, seeds)
+    for i in range(n-1):
+        result += esti.estimate(graph, seeds)
+    result /= n
+    return result
+    
 class Graph():
     def __init__(self, vertices=0, edges=0):
         self.vertices = int(vertices)
@@ -89,18 +56,18 @@ class Graph():
         self.inWeightTable = dict()  # inverse weight table (in)
         pass
 
-    def addEdge(self, edge):
+    def addEdge(self, start, end, weight):
         try:
-            self.weightTable[edge.start][edge.end] = edge.weight
+            self.weightTable[start][end] = weight
         except KeyError:
-            self.weightTable[edge.start] = dict()
-            self.weightTable[edge.start][edge.end] = edge.weight
+            self.weightTable[start] = dict()
+            self.weightTable[start][end] = weight
 
         try:
-            self.inWeightTable[edge.end][edge.start] = edge.weight
+            self.inWeightTable[end][start] = weight
         except KeyError:
-            self.inWeightTable[edge.end] = dict()
-            self.inWeightTable[edge.end][edge.start] = edge.weight
+            self.inWeightTable[end] = dict()
+            self.inWeightTable[end][start] = weight
         pass
 
     def getInNeighbors(self, node):
@@ -179,4 +146,35 @@ class Estimator():
         return count
 
 if __name__ == "__main__":
-    main(DIFFUSION_MODEL, N)
+    opts, args = getopt.getopt(sys.argv[1:], "i:s:m:t:")
+    for op, value in opts:
+        if op == '-i':
+            SOCIAL_NETWORK = value
+        if op == '-s':
+            SEED_SET = value
+        if op == '-m':
+            DIFFUSION_MODEL = value
+        if op == '-t':
+            TIME_BUDGET = int(value)
+    if DIFFUSION_MODEL != 'IC' and DIFFUSION_MODEL != 'LT':
+        raise ValueError('Diffusion Model Can Only Be "IC" or "LT"!')
+
+    try:
+        start_time = time.time()
+        network = open(SOCIAL_NETWORK)
+        seed = open(SEED_SET)
+        vertices, edges = network.readline().split()
+        graph = Graph(vertices, edges)
+        for line in network:
+            start, end, weight = int(line.split()[0]), int(
+                line.split()[1]), float(line.split()[2])
+            graph.addEdge(start, end, weight)
+        seeds = []
+        for line in seed:
+            seeds.append(int(line.split()[0]))
+    except IOError:
+        print('File Not Found!')
+        sys.exit()
+
+    main(graph, seeds, DIFFUSION_MODEL, N, TIME_BUDGET)
+    print('time cost: ',time.time()-start_time)
